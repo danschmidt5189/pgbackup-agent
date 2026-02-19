@@ -1,6 +1,10 @@
 """S3 upload functionality."""
 
+import logging
+
 import boto3
+
+logger = logging.getLogger(__name__)
 
 
 def upload_to_s3(
@@ -31,6 +35,11 @@ def upload_to_s3(
     if endpoint_url:
         kwargs["endpoint_url"] = endpoint_url
 
+    logger.info(
+        "Uploading %s -> s3://%s/%s", filepath, bucket, key,
+    )
     client = boto3.client("s3", **kwargs)
     client.upload_file(filepath, bucket, key)
-    return f"s3://{bucket}/{key}"
+    uri = f"s3://{bucket}/{key}"
+    logger.info("Upload complete: %s", uri)
+    return uri

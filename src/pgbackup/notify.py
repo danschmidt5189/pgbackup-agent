@@ -1,12 +1,15 @@
 """Notification functionality (SMTP and Slack)."""
 
 import json
+import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from urllib.request import Request, urlopen
 
 from pgbackup.models import BackupReport
+
+logger = logging.getLogger(__name__)
 
 
 def send_smtp_notification(
@@ -32,8 +35,16 @@ def send_smtp_notification(
     msg.attach(MIMEText(body, "plain"))
 
     if port == 465:
+        logger.debug(
+            "Connecting to SMTP server %s:%d (SSL)",
+            server, port,
+        )
         smtp = smtplib.SMTP_SSL(server, port)
     else:
+        logger.debug(
+            "Connecting to SMTP server %s:%d",
+            server, port,
+        )
         smtp = smtplib.SMTP(server, port)
 
     with smtp:
@@ -44,6 +55,10 @@ def send_smtp_notification(
                 smtp.ehlo()
             smtp.login(sender, password)
         smtp.sendmail(sender, [sender], msg.as_string())
+    logger.info(
+        "Email notification sent to %s via %s:%d",
+        sender, server, port,
+    )
 
 
 def send_slack_notification(
@@ -71,6 +86,7 @@ def send_slack_notification(
         headers={"Content-Type": "application/json"},
     )
     urlopen(req)
+    logger.info("Slack notification sent")
 
 
 def _build_subject(report: BackupReport) -> str:

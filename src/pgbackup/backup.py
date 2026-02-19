@@ -34,6 +34,11 @@ def run_backup(args) -> BackupReport:
     now = datetime.now().astimezone()
     report = BackupReport()
 
+    logger.info(
+        "Starting backup run with %d target(s)",
+        len(args.databases),
+    )
+
     for db_url in args.databases:
         config = parse_db_url(db_url)
 
@@ -63,6 +68,14 @@ def run_backup(args) -> BackupReport:
             report.results.append(result)
 
     _send_notifications(args, report)
+
+    succeeded = sum(1 for r in report.results if r.success)
+    failed = sum(1 for r in report.results if not r.success)
+    logger.info(
+        "Backup run finished: %d succeeded, %d failed, "
+        "total size %d bytes",
+        succeeded, failed, report.total_size,
+    )
     return report
 
 
@@ -115,6 +128,10 @@ def _backup_single(args, config, dbname, now) -> BackupResult:
                 error=f"S3 upload failed: {exc}",
             )
 
+    logger.info(
+        "Backup OK: %s://%s/%s (%d bytes)",
+        config.driver, config.host, dbname, size,
+    )
     return BackupResult(
         database=dbname,
         server=config,
@@ -127,6 +144,7 @@ def _backup_single(args, config, dbname, now) -> BackupResult:
 def _send_notifications(args, report: BackupReport) -> None:
     """Dispatch configured notifications."""
     if args.smtp:
+        logger.info("Sending SMTP notification")
         password = _resolve_smtp_password(args)
         try:
             send_smtp_notification(
@@ -140,6 +158,7 @@ def _send_notifications(args, report: BackupReport) -> None:
             logger.error("Failed to send email: %s", exc)
 
     if args.slack:
+        logger.info("Sending Slack notification")
         try:
             send_slack_notification(
                 report=report,

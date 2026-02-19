@@ -6,6 +6,8 @@ import sys
 
 from pgbackup.backup import run_backup
 
+logger = logging.getLogger(__name__)
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build and return the argument parser."""
@@ -160,5 +162,17 @@ def main(argv: list[str] | None = None) -> None:
             "when --slack is enabled"
         )
 
+    logger.info(
+        "pgbackup starting: %d DB target(s), "
+        "dest=%s, s3=%s, smtp=%s, slack=%s",
+        len(args.databases),
+        args.dest,
+        args.s3,
+        args.smtp,
+        args.slack,
+    )
+
     report = run_backup(args)
-    sys.exit(0 if report.success else 1)
+    code = 0 if report.success else 1
+    logger.info("pgbackup exiting with code %d", code)
+    sys.exit(code)

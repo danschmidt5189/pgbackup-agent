@@ -1,10 +1,13 @@
 """Database URL parsing and operations."""
 
+import logging
 import os
 import subprocess
 from urllib.parse import parse_qs, urlparse
 
 from pgbackup.models import DatabaseConfig
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_PORTS = {
     "postgres": 5432,
@@ -46,7 +49,7 @@ def parse_db_url(url: str) -> DatabaseConfig:
     if password_file:
         password = read_password_file(password_file)
 
-    return DatabaseConfig(
+    cfg = DatabaseConfig(
         driver=driver,
         username=username,
         password=password,
@@ -54,19 +57,36 @@ def parse_db_url(url: str) -> DatabaseConfig:
         port=port,
         options=options,
     )
+    logger.debug(
+        "Parsed DB URL: %s://%s@%s:%d (options=%s)",
+        driver, username, host, port, options,
+    )
+    return cfg
 
 
 def read_password_file(path: str) -> str:
     """Read and strip a password from a file."""
+    logger.debug("Reading password from file: %s", path)
     with open(path) as f:
         return f.read().strip()
 
 
 def list_databases(config: DatabaseConfig) -> list[str]:
     """List non-system databases on the given server."""
+    logger.info(
+        "Discovering databases on %s://%s:%d",
+        config.driver, config.host, config.port,
+    )
     if config.driver == "postgres":
-        return _list_postgres_databases(config)
-    return _list_mariadb_databases(config)
+        dbs = _list_postgres_databases(config)
+    else:
+        dbs = _list_mariadb_databases(config)
+    logger.info(
+        "Found %d database(s) on %s://%s: %s",
+        len(dbs), config.driver, config.host,
+        ", ".join(dbs),
+    )
+    return dbs
 
 
 def _list_postgres_databases(
@@ -141,10 +161,18 @@ def dump_database(
     """Dump a single database to the given destination path."""
     os.makedirs(os.path.dirname(dest), exist_ok=True)
 
+    logger.info(
+        "Dumping %s://%s/%s -> %s",
+        config.driver, config.host, dbname, dest,
+    )
     if config.driver == "postgres":
         _dump_postgres(config, dbname, dest)
     else:
         _dump_mariadb(config, dbname, dest)
+    size = os.path.getsize(dest)
+    logger.info(
+        "Dump complete: %s (%d bytes)", dest, size,
+    )
 
 
 def _dump_postgres(

@@ -1,9 +1,12 @@
 """Template string interpolation for backup paths."""
 
+import logging
 import os
 from datetime import datetime
 
 from pgbackup.models import DatabaseConfig
+
+logger = logging.getLogger(__name__)
 
 
 def format_dest(
@@ -19,7 +22,9 @@ def format_dest(
     database URL.
     """
     context = _build_context(config, dbname, now)
-    return template.format_map(context)
+    result = template.format_map(context)
+    logger.debug("format_dest: %s -> %s", template, result)
+    return result
 
 
 def format_s3_key(
@@ -38,7 +43,11 @@ def format_s3_key(
     context["filepath"] = filepath
     context["filename"] = os.path.basename(filepath)
     context["filedir"] = os.path.dirname(filepath)
-    return template.format_map(context)
+    result = template.format_map(context)
+    logger.debug(
+        "format_s3_key: %s -> %s", template, result,
+    )
+    return result
 
 
 def _build_context(
