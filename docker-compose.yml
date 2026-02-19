@@ -35,6 +35,8 @@ services:
     environment:
       POSTGRES_USER: pguser
       POSTGRES_PASSWORD: pgpass
+    volumes:
+      - ./initdb/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pguser"]
       interval: 5s
@@ -46,6 +48,8 @@ services:
     environment:
       POSTGRES_USER: pguser
       POSTGRES_PASSWORD: pgpass
+    volumes:
+      - ./initdb/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pguser"]
       interval: 5s
@@ -57,6 +61,8 @@ services:
     environment:
       POSTGRES_USER: pguser
       POSTGRES_PASSWORD: pgpass
+    volumes:
+      - ./initdb/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pguser"]
       interval: 5s
@@ -70,6 +76,8 @@ services:
       MARIADB_USER: mdbuser
       MARIADB_PASSWORD: mdbpass
       MARIADB_DATABASE: testdb
+    volumes:
+      - ./initdb/mariadb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
         [
@@ -89,6 +97,8 @@ services:
       MARIADB_USER: mdbuser
       MARIADB_PASSWORD: mdbpass
       MARIADB_DATABASE: testdb
+    volumes:
+      - ./initdb/mariadb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
         [
@@ -108,6 +118,8 @@ services:
       MARIADB_USER: mdbuser
       MARIADB_PASSWORD: mdbpass
       MARIADB_DATABASE: testdb
+    volumes:
+      - ./initdb/mariadb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
         [

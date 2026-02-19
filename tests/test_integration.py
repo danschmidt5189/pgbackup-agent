@@ -77,6 +77,13 @@ def s3_bucket(s3_client):
 
 
 # -----------------------------------------------------------------
+# Expected seed databases from initdb/ scripts
+# -----------------------------------------------------------------
+
+PG_SEED_DBS = {"climbers", "athletes"}
+MDB_SEED_DBS = {"testdb", "racing"}
+
+# -----------------------------------------------------------------
 # list_databases
 # -----------------------------------------------------------------
 
@@ -84,21 +91,34 @@ def s3_bucket(s3_client):
 class TestListDatabasesIntegration:
     """Verify database discovery against real servers."""
 
-    def test_postgres_discovers_databases(
+    def test_postgres_discovers_seed_databases(
         self, pg_int_config,
     ):
         dbs = list_databases(pg_int_config)
-        # The Docker Compose Postgres services have no
-        # POSTGRES_DB override so only the default
-        # 'postgres' db exists, which is filtered out.
-        # Result may contain any user-created dbs.
-        assert isinstance(dbs, list)
+        assert PG_SEED_DBS.issubset(set(dbs))
 
-    def test_mariadb_discovers_databases(
+    def test_postgres_excludes_system_databases(
+        self, pg_int_config,
+    ):
+        dbs = list_databases(pg_int_config)
+        for sysdb in ("template0", "template1", "postgres"):
+            assert sysdb not in dbs
+
+    def test_mariadb_discovers_seed_databases(
         self, mdb_int_config,
     ):
         dbs = list_databases(mdb_int_config)
-        assert "testdb" in dbs
+        assert MDB_SEED_DBS.issubset(set(dbs))
+
+    def test_mariadb_excludes_system_databases(
+        self, mdb_int_config,
+    ):
+        dbs = list_databases(mdb_int_config)
+        for sysdb in (
+            "information_schema", "mysql",
+            "performance_schema", "sys",
+        ):
+            assert sysdb not in dbs
 
 
 # -----------------------------------------------------------------
@@ -109,9 +129,19 @@ class TestListDatabasesIntegration:
 class TestDumpDatabaseIntegration:
     """Verify dumps produce non-empty files."""
 
+    def test_postgres_dump(self, pg_int_config, tmp_path):
+        dest = str(tmp_path / "climbers.dump")
+        dump_database(pg_int_config, "climbers", dest)
+        assert os.path.getsize(dest) > 0
+
     def test_mariadb_dump(self, mdb_int_config, tmp_path):
         dest = str(tmp_path / "testdb.dump")
         dump_database(mdb_int_config, "testdb", dest)
+        assert os.path.getsize(dest) > 0
+
+    def test_mariadb_dump_racing(self, mdb_int_config, tmp_path):
+        dest = str(tmp_path / "racing.dump")
+        dump_database(mdb_int_config, "racing", dest)
         assert os.path.getsize(dest) > 0
 
 
@@ -122,6 +152,33 @@ class TestDumpDatabaseIntegration:
 
 class TestFullPipeline:
     """End-to-end: backup → S3 → email."""
+
+    def test_postgres_pipeline(
+        self, pg_int_config, tmp_path, s3_bucket,
+    ):
+        host = pg_int_config.host
+        parser = build_parser()
+        args = parser.parse_args([
+            "--db",
+            f"postgres://pguser:pgpass@{host}"
+            "?env=integration",
+            "--dest",
+            str(tmp_path / "{env}/{dbhost}/{dbname}.dump"),
+            "--s3",
+            "--s3-bucket", s3_bucket,
+            "--s3-key", "{env}/{dbhost}/{filename}",
+            "--s3-endpoint-url", "http://minio:9000",
+        ])
+
+        report = run_backup(args)
+
+        assert report.success
+        backed_up_dbs = {r.database for r in report.results}
+        assert PG_SEED_DBS.issubset(backed_up_dbs)
+        for r in report.results:
+            assert os.path.exists(r.local_path)
+            assert r.size > 0
+            assert r.s3_uri is not None
 
     def test_mariadb_pipeline(
         self, mdb_int_config, tmp_path, s3_bucket,
@@ -147,6 +204,8 @@ class TestFullPipeline:
         report = run_backup(args)
 
         assert report.success
+        backed_up_dbs = {r.database for r in report.results}
+        assert MDB_SEED_DBS.issubset(backed_up_dbs)
         for r in report.results:
             assert os.path.exists(r.local_path)
             assert r.size > 0
