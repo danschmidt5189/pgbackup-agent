@@ -1,0 +1,77 @@
+name: Build and Push
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start services
+        run: docker compose up --build --wait app
+
+      - name: Lint
+        run: docker compose exec app ruff check src/ tests/
+
+      - name: Test
+        run: docker compose exec app pytest
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: tags
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          BUILD_ID=${{ github.run_id }}
+          BRANCH="${GITHUB_REF_NAME}"
+          # Sanitise branch name for Docker tag
+          BRANCH_TAG=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9._-]/-/g')
+
+          TAGS="${REGISTRY}/${IMAGE_NAME}:${SHORT_SHA}-${BUILD_ID}"
+          TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:${SHORT_SHA}"
+          TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:${BRANCH_TAG}"
+
+          # Default-branch extras
+          DEFAULT_BRANCH=${{ github.event.repository.default_branch }}
+          if [ "$BRANCH" = "$DEFAULT_BRANCH" ]; then
+            TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:edge"
+            TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:latest"
+          fi
+
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}

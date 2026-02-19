@@ -1,0 +1,157 @@
+services:
+  app:
+    build: .
+    depends_on:
+      postgres16:
+        condition: service_healthy
+      postgres17:
+        condition: service_healthy
+      postgres18:
+        condition: service_healthy
+      mariadb1011:
+        condition: service_healthy
+      mariadb118:
+        condition: service_healthy
+      mariadb114:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_ENDPOINT_URL: http://minio:9000
+    command: ["sleep", "infinity"]
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+    secrets:
+      - pgpass
+      - mdbpass
+
+  postgres16:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: pguser
+      POSTGRES_PASSWORD: pgpass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pguser"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres17:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: pguser
+      POSTGRES_PASSWORD: pgpass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pguser"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres18:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: pguser
+      POSTGRES_PASSWORD: pgpass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pguser"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mariadb1011:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_USER: mdbuser
+      MARIADB_PASSWORD: mdbpass
+      MARIADB_DATABASE: testdb
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "healthcheck.sh",
+          "--connect",
+          "--innodb_initialized",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mariadb118:
+    image: mariadb:11.8
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_USER: mdbuser
+      MARIADB_PASSWORD: mdbpass
+      MARIADB_DATABASE: testdb
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "healthcheck.sh",
+          "--connect",
+          "--innodb_initialized",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mariadb114:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_USER: mdbuser
+      MARIADB_PASSWORD: mdbpass
+      MARIADB_DATABASE: testdb
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "healthcheck.sh",
+          "--connect",
+          "--innodb_initialized",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing myminio/pgbackup-test
+      "
+
+  mailpit:
+    image: axllent/mailpit
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+
+secrets:
+  pgpass:
+    file: ./secrets/pgpass
+  mdbpass:
+    file: ./secrets/mdbpass
