@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pgbackup"
+version = "0.1.0"
+description = "Dockerized backup utility for Postgres and MariaDB"
+requires-python = ">=3.14"
+dependencies = [
+    "boto3>=1.35",
+]
+
+[project.scripts]
+pgbackup = "pgbackup.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--cov=pgbackup",
+    "--cov-report=term-missing",
+    "--cov-fail-under=100",
+    "-v",
+]
+markers = [
+    "integration: tests requiring Docker Compose services",
+]
+
+[tool.coverage.run]
+omit = ["*/__main__.py"]
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]

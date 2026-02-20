@@ -1,0 +1,67 @@
+name: Tag Release
+
+on:
+  push:
+    tags: ["*"]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  packages: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: imjasonh/setup-crane@v0.4
+
+      - name: Re-tag image
+        run: |
+          set -euo pipefail
+
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          SOURCE="${REGISTRY}/${IMAGE_NAME}:${SHORT_SHA}"
+          GIT_TAG="${GITHUB_REF_NAME}"
+
+          echo "Source image: ${SOURCE}"
+          echo "Git tag:      ${GIT_TAG}"
+
+          # Always create the full git-tag
+          crane tag "${SOURCE}" "${GIT_TAG}"
+
+          # Parse semver: MAJOR.MINOR.PATCH[-PRERELEASE]
+          if [[ "${GIT_TAG}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-(.+))?$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            PRERELEASE="${BASH_REMATCH[5]}"
+
+            if [[ -z "${PRERELEASE}" ]]; then
+              # Stable release: 1.2.3 → 1, 1.2, 1.2.3
+              crane tag "${SOURCE}" "${MAJOR}"
+              crane tag "${SOURCE}" "${MAJOR}.${MINOR}"
+              crane tag "${SOURCE}" "${MAJOR}.${MINOR}.${PATCH}"
+            elif [[ "${PRERELEASE}" =~ ^rc ]]; then
+              # Release-candidate: only the full tag (already done)
+              echo "Pre-release (rc) — no component tags"
+            else
+              # Non-rc pre-release: 1.2.3-456 → 1, 1.2, 1.2.3, full
+              crane tag "${SOURCE}" "${MAJOR}"
+              crane tag "${SOURCE}" "${MAJOR}.${MINOR}"
+              crane tag "${SOURCE}" "${MAJOR}.${MINOR}.${PATCH}"
+            fi
+          else
+            echo "Tag does not match semver — skipping component tags"
+          fi
