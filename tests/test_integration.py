@@ -16,6 +16,12 @@ from pgbackup.backup import run_backup
 from pgbackup.cli import build_parser
 from pgbackup.db import dump_database, list_databases
 from pgbackup.models import DatabaseConfig
+from tests.conftest import (
+    MDB_HOSTS,
+    MDB_SEED_DBS,
+    PG_HOSTS,
+    PG_SEED_DBS,
+)
 
 IN_DOCKER = os.path.exists("/.dockerenv")
 
@@ -27,9 +33,6 @@ pytestmark = pytest.mark.skipif(
 # -----------------------------------------------------------------
 # Database fixtures (parametrized over versions)
 # -----------------------------------------------------------------
-
-PG_HOSTS = ["postgres16", "postgres17", "postgres18"]
-MDB_HOSTS = ["mariadb1011", "mariadb118", "mariadb114"]
 
 
 @pytest.fixture(params=PG_HOSTS, ids=PG_HOSTS)
@@ -77,13 +80,6 @@ def s3_bucket(s3_client):
 
 
 # -----------------------------------------------------------------
-# Expected seed databases from initdb/ scripts
-# -----------------------------------------------------------------
-
-PG_SEED_DBS = {"climbers", "athletes"}
-MDB_SEED_DBS = {"testdb", "racing"}
-
-# -----------------------------------------------------------------
 # list_databases
 # -----------------------------------------------------------------
 
@@ -95,7 +91,7 @@ class TestListDatabasesIntegration:
         self, pg_int_config,
     ):
         dbs = list_databases(pg_int_config)
-        assert PG_SEED_DBS.issubset(set(dbs))
+        assert set(dbs) == PG_SEED_DBS
 
     def test_postgres_excludes_system_databases(
         self, pg_int_config,
@@ -108,7 +104,7 @@ class TestListDatabasesIntegration:
         self, mdb_int_config,
     ):
         dbs = list_databases(mdb_int_config)
-        assert MDB_SEED_DBS.issubset(set(dbs))
+        assert set(dbs) == MDB_SEED_DBS
 
     def test_mariadb_excludes_system_databases(
         self, mdb_int_config,
@@ -174,7 +170,7 @@ class TestFullPipeline:
 
         assert report.success
         backed_up_dbs = {r.database for r in report.results}
-        assert PG_SEED_DBS.issubset(backed_up_dbs)
+        assert backed_up_dbs == PG_SEED_DBS
         for r in report.results:
             assert os.path.exists(r.local_path)
             assert r.size > 0
@@ -205,7 +201,7 @@ class TestFullPipeline:
 
         assert report.success
         backed_up_dbs = {r.database for r in report.results}
-        assert MDB_SEED_DBS.issubset(backed_up_dbs)
+        assert backed_up_dbs == MDB_SEED_DBS
         for r in report.results:
             assert os.path.exists(r.local_path)
             assert r.size > 0

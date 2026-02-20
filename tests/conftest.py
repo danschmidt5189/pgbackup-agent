@@ -14,7 +14,10 @@ integration = pytest.mark.skipif(
 )
 
 PG_HOSTS = ["postgres16", "postgres17", "postgres18"]
-MDB_HOSTS = ["mariadb1011", "mariadb118", "mariadb123"]
+MDB_HOSTS = ["mariadb1011", "mariadb118", "mariadb114"]
+
+PG_SEED_DBS = {"climbers", "athletes", "pguser"}
+MDB_SEED_DBS = {"testdb", "racing"}
 
 
 # --- Simple (non-parametrized) unit-test fixtures ---
